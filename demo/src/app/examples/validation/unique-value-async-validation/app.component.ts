@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { FormGroup, FormControl } from '@angular/forms';
 import { FormlyFormOptions, FormlyFieldConfig } from '@ngx-formly/core';
+import { of } from 'rxjs';
 
 @Component({
   selector: 'formly-app-example',
@@ -11,18 +12,14 @@ export class AppComponent {
   model: any = {};
   options: FormlyFormOptions = {};
 
-  existingUsers = [
-    'user1',
-    'user2',
-    'user3',
-  ];
+  existingUsers = ['user1', 'user2', 'user3'];
 
   fields: FormlyFieldConfig[] = [
     {
-      key: 'text',
+      key: 'username1',
       type: 'input',
       templateOptions: {
-        label: 'Username',
+        label: 'Username (validated using `Promise`)',
         placeholder: 'Username',
         required: true,
       },
@@ -34,6 +31,23 @@ export class AppComponent {
                 resolve(this.existingUsers.indexOf(control.value) === -1);
               }, 1000);
             });
+          },
+          message: 'This username is already taken.',
+        },
+      },
+    },
+    {
+      key: 'username2',
+      type: 'input',
+      templateOptions: {
+        label: 'Username (validated using `Observable`)',
+        placeholder: 'Username',
+        required: true,
+      },
+      asyncValidators: {
+        uniqueUsername: {
+          expression: (control: FormControl) => {
+            return of(this.existingUsers.indexOf(control.value) === -1);
           },
           message: 'This username is already taken.',
         },

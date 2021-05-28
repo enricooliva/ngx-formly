@@ -6,6 +6,7 @@ import { FormlyBootstrapModule } from '@ngx-formly/bootstrap';
 import { MatTabsModule } from '@angular/material/tabs';
 
 import { AppComponent } from './app.component';
+import { FormlyFieldTabs } from './tabs.type';
 
 @NgModule({
   imports: [
@@ -14,13 +15,10 @@ import { AppComponent } from './app.component';
     MatTabsModule,
     FormlyBootstrapModule,
     FormlyModule.forRoot({
-      validationMessages: [
-        { name: 'required', message: 'This field is required' },
-      ],
+      validationMessages: [{ name: 'required', message: 'This field is required' }],
+      types: [{ name: 'tabs', component: FormlyFieldTabs }],
     }),
   ],
-  declarations: [
-    AppComponent,
-  ],
+  declarations: [AppComponent, FormlyFieldTabs],
 })
-export class AppModule { }
+export class AppModule {}

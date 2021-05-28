@@ -1,103 +1,138 @@
-import { FormlyExtension } from '../../services/formly.config';
-import { FormlyFieldConfigCache } from '../../components/formly.field.config';
-import { AbstractControl, FormGroup, FormArray, FormControl, AbstractControlOptions } from '@angular/forms';
-import { getKeyPath, isNullOrUndefined } from '../../utils';
+import { FormlyExtension, FormlyFieldConfigCache } from '../../models';
+import {
+  FormGroup,
+  FormControl,
+  AbstractControlOptions,
+  Validators,
+  ValidatorFn,
+  AsyncValidatorFn,
+} from '@angular/forms';
+import { getFieldValue, defineHiddenProp, isNil } from '../../utils';
+import { registerControl, findControl, updateValidity as updateControlValidity } from './utils';
+import { of } from 'rxjs';
 
 /** @experimental */
 export class FieldFormExtension implements FormlyExtension {
-  onPopulate(field: FormlyFieldConfigCache) {
-    if (field.key && field.type) {
-      const paths = getKeyPath({ key: field.key });
-      let rootForm = field.parent.formControl as FormGroup, rootModel = field.fieldGroup ? { [paths[0]]: field.model } : field.model;
-      paths.forEach((path, index) => {
-        // FormGroup/FormArray only allow string value for path
-        const formPath = path.toString();
-        // is last item
-        if (index === paths.length - 1) {
-          this.addFormControl(rootForm, field, rootModel, formPath);
-        } else {
-          if (!rootModel[path]) {
-            rootModel[path] = typeof path === 'string' ? {} : [];
-          }
-          this.addFormControl(rootForm, { key: formPath, fieldGroup: [], modelOptions: {}, templateOptions: {} }, rootModel, formPath);
-
-          rootForm = <FormGroup> rootForm.get(formPath);
-          rootModel = rootModel[path];
-        }
-      });
+  private root: FormlyFieldConfigCache;
+  prePopulate(field: FormlyFieldConfigCache) {
+    if (!this.root) {
+      this.root = field;
     }
 
-    if (field.fieldGroup && !field.formControl) {
-      field.formControl = field.parent.formControl;
-    }
-  }
-
-  private addFormControl(form: FormGroup | FormArray, field: FormlyFieldConfigCache, model: any, path: string | number) {
-    const abstractControlOptions = {
-      validators: field._validators,
-      asyncValidators: field._asyncValidators,
-      updateOn: field.modelOptions.updateOn,
-    } as AbstractControlOptions;
-    let control: AbstractControl;
-
-    if (field.formControl instanceof AbstractControl || form.get(<string> path)) {
-      control = field.formControl || form.get(<string> path);
-      if (
-        !(isNullOrUndefined(control.value) && isNullOrUndefined(model[path]))
-        && control.value !== model[path]
-        && control instanceof FormControl
-      ) {
-        control.patchValue(model[path]);
-      }
-
-      if (abstractControlOptions.validators || abstractControlOptions.asyncValidators) {
-        if (abstractControlOptions.validators) {
-          control.setValidators(abstractControlOptions.validators);
-        }
-        if (abstractControlOptions.asyncValidators) {
-          control.setAsyncValidators(abstractControlOptions.asyncValidators);
-        }
-        control.updateValueAndValidity();
-      }
-    } else if (field._componentFactory && field._componentFactory.component && field._componentFactory.component.createControl) {
-      const component = field._componentFactory.component;
-      console.warn(`NgxFormly: '${component.name}::createControl' is deprecated since v5.0, use 'prePopulate' hook instead.`);
-      control = component.createControl(model[path], field);
-    } else if (field.fieldGroup && !field.fieldArray) {
-      control = new FormGroup({}, abstractControlOptions);
-    } else if (field.fieldArray) {
-      control = new FormArray([], abstractControlOptions);
-    } else {
-      control = new FormControl(model[path], abstractControlOptions);
-    }
-
-    if (field.templateOptions.disabled) {
-      control.disable();
-    }
-
-    // Replace decorated property with a getter that returns the observable.
-    // https://github.com/angular-redux/store/blob/master/src/decorators/select.ts#L79-L85
-    if (delete field.templateOptions.disabled) {
-      Object.defineProperty(field.templateOptions, 'disabled', {
-        get: () => !field.formControl.enabled,
-        set: (value: boolean) => value ? field.formControl.disable() : field.formControl.enable(),
-        enumerable: true,
+    if (field.parent) {
+      Object.defineProperty(field, 'form', {
+        get: () => field.parent.formControl,
         configurable: true,
       });
     }
+  }
 
-    if (field) {
-      field.formControl = control;
-    }
-
-    if (form instanceof FormArray) {
-      if (form.at(<number> path) !== control) {
-        form.setControl(<number> path, control);
-      }
+  onPopulate(field: FormlyFieldConfigCache) {
+    if (field.hasOwnProperty('fieldGroup') && isNil(field.key)) {
+      defineHiddenProp(field, 'formControl', field.form);
     } else {
-      if (form.get(<string> path) !== control) {
-        form.setControl(<string> path, control);
+      this.addFormControl(field);
+    }
+  }
+
+  postPopulate(field: FormlyFieldConfigCache) {
+    if (this.root !== field) {
+      return;
+    }
+
+    this.root = null;
+    const fieldsToUpdate = this.setValidators(field);
+    if (fieldsToUpdate.length === 0) {
+      return;
+    }
+
+    if (fieldsToUpdate.length === 1) {
+      fieldsToUpdate[0].formControl.updateValueAndValidity();
+    } else {
+      (field.form as any)._updateTreeValidity();
+    }
+  }
+
+  private addFormControl(field: FormlyFieldConfigCache) {
+    let control = findControl(field);
+    if (!control) {
+      const controlOptions: AbstractControlOptions = { updateOn: field.modelOptions.updateOn };
+
+      if (field.fieldGroup) {
+        control = new FormGroup({}, controlOptions);
+      } else {
+        const value = !isNil(field.key) ? getFieldValue(field) : field.defaultValue;
+        control = new FormControl({ value, disabled: false }, controlOptions);
       }
     }
+
+    registerControl(field, control);
+  }
+
+  private setValidators(field: FormlyFieldConfigCache) {
+    let updateValidity = false;
+    if (!isNil(field.key) || !field.parent || (isNil(field.key) && !field.fieldGroup)) {
+      const { formControl: c } = field;
+      const disabled = field.templateOptions ? field.templateOptions.disabled : false;
+      if (disabled && c.enabled) {
+        c.disable({ emitEvent: false, onlySelf: true });
+        if (!c.parent) {
+          updateControlValidity(c);
+        } else {
+          updateValidity = true;
+        }
+      }
+
+      if (null === c.validator || null === c.asyncValidator) {
+        c.setValidators(() => {
+          const v = Validators.compose(this.mergeValidators<ValidatorFn>(field, '_validators'));
+
+          return v?.(c);
+        });
+        c.setAsyncValidators(() => {
+          const v = Validators.composeAsync(this.mergeValidators<AsyncValidatorFn>(field, '_asyncValidators'));
+
+          return v ? v(c) : of(null);
+        });
+
+        if (!c.parent) {
+          updateControlValidity(c);
+        } else {
+          updateValidity = true;
+        }
+      }
+    }
+
+    const fieldsToUpdate = updateValidity ? [field] : [];
+    (field.fieldGroup || []).forEach((f) => {
+      if (f) {
+        const childrenToUpdate = this.setValidators(f);
+        if (!updateValidity) {
+          fieldsToUpdate.push(...childrenToUpdate);
+        }
+      }
+    });
+
+    return fieldsToUpdate;
+  }
+
+  private mergeValidators<T>(field: FormlyFieldConfigCache, type: '_validators' | '_asyncValidators'): T[] {
+    const validators: any = [];
+    const c = field.formControl;
+    if (c?.['_fields']?.length > 1) {
+      c['_fields']
+        .filter((f: FormlyFieldConfigCache) => !f._hide)
+        .forEach((f: FormlyFieldConfigCache) => validators.push(...f[type]));
+    } else {
+      validators.push(...field[type]);
+    }
+
+    if (field.fieldGroup) {
+      field.fieldGroup
+        .filter((f) => f?.fieldGroup && isNil(f.key))
+        .forEach((f) => validators.push(...this.mergeValidators(f, type)));
+    }
+
+    return validators;
   }
 }

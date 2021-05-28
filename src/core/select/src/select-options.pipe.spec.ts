@@ -20,6 +20,50 @@ describe('Pipe: FormlySelectOptionsPipe', () => {
     });
   });
 
+  it('should add a flag for flat options', () => {
+    const field: any = { templateOptions: {} };
+    pipe.transform([{ label: '1', value: '1' }], field).subscribe((options) => {
+      expect(field.templateOptions._flatOptions).toBeTrue();
+    });
+
+    pipe.transform([{ label: '1', value: '1', group: '1' }], field).subscribe((options) => {
+      expect(field.templateOptions._flatOptions).toBeFalse();
+    });
+  });
+
+  it('already grouped structure, so nothing to process', () => {
+    const field = {};
+    const options = [
+      {
+        label: 'g1',
+        group: [
+          { label: '1', value: '1' },
+          { label: '2', value: '2' },
+        ],
+      },
+      {
+        label: 'g2',
+        group: [{ label: '3', value: '3' }],
+      },
+    ];
+
+    pipe.transform(options, field).subscribe((options) => {
+      expect(options).toEqual([
+        {
+          label: 'g1',
+          group: [
+            { label: '1', value: '1', disabled: false },
+            { label: '2', value: '2', disabled: false },
+          ],
+        },
+        {
+          label: 'g2',
+          group: [{ label: '3', value: '3', disabled: false }],
+        },
+      ]);
+    });
+  });
+
   describe('label & value & disabled props', () => {
     let options;
     beforeEach(() => {
@@ -43,9 +87,9 @@ describe('Pipe: FormlySelectOptionsPipe', () => {
     it('as a function', () => {
       const field = {
         templateOptions: {
-          labelProp: item => item.name,
-          valueProp: item => item.id,
-          disabledProp: item => item.locked,
+          labelProp: (item) => item.name,
+          valueProp: (item) => item.id,
+          disabledProp: (item) => item.locked,
         },
       };
 
@@ -63,10 +107,10 @@ describe('Pipe: FormlySelectOptionsPipe', () => {
 
       const field = {
         templateOptions: {
-          labelProp: item => item.name,
-          valueProp: item => item.id,
-          disabledProp: item => item.locked,
-          groupProp: item => item.parent,
+          labelProp: (item) => item.name,
+          valueProp: (item) => item.id,
+          disabledProp: (item) => item.locked,
+          groupProp: (item) => item.parent,
         },
       };
 
@@ -81,9 +125,7 @@ describe('Pipe: FormlySelectOptionsPipe', () => {
           },
           {
             label: '2',
-            group: [
-              { label: '3', value: '3', disabled: false },
-            ],
+            group: [{ label: '3', value: '3', disabled: false }],
           },
         ]);
       });
@@ -114,16 +156,14 @@ describe('Pipe: FormlySelectOptionsPipe', () => {
           },
           {
             label: '2',
-            group: [
-              { label: '3', value: '3', disabled: false },
-            ],
+            group: [{ label: '3', value: '3', disabled: false }],
           },
         ]);
       });
     });
 
     it('as a function', () => {
-      const field = { templateOptions: { groupProp: item => item.parent } };
+      const field = { templateOptions: { groupProp: (item) => item.parent } };
 
       pipe.transform(options, field).subscribe((options) => {
         expect(options).toEqual([
@@ -136,9 +176,7 @@ describe('Pipe: FormlySelectOptionsPipe', () => {
           },
           {
             label: '2',
-            group: [
-              { label: '3', value: '3', disabled: false },
-            ],
+            group: [{ label: '3', value: '3', disabled: false }],
           },
         ]);
       });

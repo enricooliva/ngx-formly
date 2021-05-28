@@ -34,7 +34,7 @@ Example with function value:
     placeholder: ''
   },
   expressionProperties: {
-    'templateOptions.disabled':(model: any, formState: any) => {
+    'templateOptions.disabled': (model: any, formState: any, field: FormlyFieldConfig) => {
       // access to the main model can be through `this.model` or `formState` or `model
       return !formState.mainModel.text
     },
@@ -45,7 +45,7 @@ Example with function value:
 The field will be hidden when *formState.mainModel.text* is empty
 
 
-**ALERT**: You can use the formstate to store information. In the example we keep the model. formstate is a property of options. [Read more](https://formly-js.github.io/ngx-formly/examples/form-options/form-state)
+**ALERT**: You can use the formstate to store information. In the example we keep the model. formstate is a property of options. [Read more](https://formly.dev/examples/form-options/form-state)
 
 ```typescript
 options = {
@@ -84,7 +84,7 @@ You can see an example [here](https://stackblitz.com/edit/angular-formly-ndfcmz?
     label: 'City',
     placeholder: 'set to 123'
   },
-  hideExpression: (model: any, formState: any) => {
+  hideExpression: (model: any, formState: any, field: FormlyFieldConfig) => {
     // access to the main model can be through `this.model` or `formState` or `model
     if (formState.mainModel && formState.mainModel.city) {
       return formState.mainModel.city !== "123"

@@ -3,94 +3,88 @@ import { Observable, of as observableOf } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { FormlyFieldConfig } from '@ngx-formly/core';
 
+interface ISelectOption {
+  label: string;
+  disabled?: boolean;
+  value?: any;
+  group?: ISelectOption[];
+}
+
+type ITransformOption = Partial<{
+  labelProp: (option: any) => string;
+  valueProp: (option: any) => any;
+  disabledProp: (option: any) => boolean;
+  groupProp: (option: any) => string;
+}>;
+
 @Pipe({ name: 'formlySelectOptions' })
 export class FormlySelectOptionsPipe implements PipeTransform {
-  transform(options, field?: FormlyFieldConfig) {
+  transform(options: any, field?: FormlyFieldConfig): Observable<ISelectOption[]> {
     if (!(options instanceof Observable)) {
       options = observableOf(options);
     }
 
-    return (options as Observable<any>).pipe(
-      map(value => this.toOptions(value, field || {})),
-    );
+    return (options as Observable<any>).pipe(map((value) => this.transformOptions(value, field)));
   }
 
-  private toOptions(options, field: FormlyFieldConfig) {
-    const gOptions: any[] = [],
-      groups: { [key: string]: any[] } = {},
-      to = field.templateOptions || {};
+  private transformOptions(options: any[], field?: FormlyFieldConfig): ISelectOption[] {
+    const to = this.transformSelectProps(field);
 
-    options.map((option: any) => {
-      if (!this.getGroupProp(option, to)) {
-        gOptions.push(this.toOption(option, to));
-      } else {
-        if (!groups[this.getGroupProp(option, to)]) {
-          groups[this.getGroupProp(option, to)] = [];
-          gOptions.push({
-            label: this.getGroupProp(option, to),
-            group: groups[this.getGroupProp(option, to)],
-          });
+    const opts: ISelectOption[] = [];
+    const groups = {};
+
+    options.forEach((option) => {
+      const o = this.transformOption(option, to);
+      if (o.group) {
+        const id = groups[o.label];
+        if (id === undefined) {
+          groups[o.label] = opts.push(o) - 1;
+        } else {
+          o.group.forEach((o) => opts[id].group.push(o));
         }
-        groups[this.getGroupProp(option, to)].push(this.toOption(option, to));
+      } else {
+        opts.push(o);
       }
     });
 
-    return gOptions;
+    if (field?.templateOptions) {
+      field.templateOptions._flatOptions = !Object.keys(groups).length;
+    }
+
+    return opts;
   }
 
-  private toOption(item, to) {
-    return {
-      label: this.getLabelProp(item, to),
-      value: this.getValueProp(item, to),
-      disabled: this.getDisabledProp(item, to) || false,
+  private transformOption(option: any, to: ITransformOption): ISelectOption {
+    const group = to.groupProp(option);
+    if (Array.isArray(group)) {
+      return {
+        label: to.labelProp(option),
+        group: group.map((opt) => this.transformOption(opt, to)),
+      };
+    }
+
+    option = {
+      label: to.labelProp(option),
+      value: to.valueProp(option),
+      disabled: !!to.disabledProp(option),
     };
+
+    if (group) {
+      return { label: group, group: [option] };
+    }
+
+    return option;
   }
 
-  private getLabelProp(item, to): string {
-    if (typeof to.labelProp === 'function') {
-      return to.labelProp(item);
-    }
+  private transformSelectProps(field: FormlyFieldConfig): ITransformOption {
+    const to = field && field.templateOptions ? field.templateOptions : {};
+    const selectPropFn = (prop: any) => (typeof prop === 'function' ? prop : (o) => o[prop]);
 
-    if (this.shouldUseLegacyOption(item, to)) {
-      return item.value;
-    }
-
-    return item[to.labelProp || 'label'];
-  }
-
-  private getValueProp(item, to): string {
-    if (typeof to.valueProp === 'function') {
-      return to.valueProp(item);
-    }
-
-    if (this.shouldUseLegacyOption(item, to)) {
-      return item.key;
-    }
-
-    return item[to.valueProp || 'value'];
-  }
-
-  private getDisabledProp(item, to): string {
-    if (typeof to.disabledProp === 'function') {
-      return to.disabledProp(item);
-    }
-    return item[to.disabledProp || 'disabled'];
-  }
-
-  private getGroupProp(item, to): string {
-    if (typeof to.groupProp === 'function') {
-      return to.groupProp(item);
-    }
-
-    return item[to.groupProp || 'group'];
-  }
-
-  private shouldUseLegacyOption(item, to) {
-    return !to.valueProp
-      && !to.labelProp
-      && item != null
-      && typeof item === 'object'
-      && 'key' in item
-      && 'value' in item;
+    return {
+      groupProp: selectPropFn(to.groupProp || 'group'),
+      labelProp: selectPropFn(to.labelProp || 'label'),
+      valueProp: selectPropFn(to.valueProp || 'value'),
+      disabledProp: selectPropFn(to.disabledProp || 'disabled'),
+    };
   }
 }

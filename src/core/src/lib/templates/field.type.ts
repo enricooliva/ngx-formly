@@ -1,41 +1,48 @@
-import { Input } from '@angular/core';
-import { FormGroup, AbstractControl } from '@angular/forms';
-import { FormlyTemplateOptions, FormlyFieldConfig, FormlyFormOptions } from '../components/formly.field.config';
+import { Input, Directive } from '@angular/core';
+import { FormlyFieldConfig, FormlyTemplateOptions } from '../models';
 
- export abstract class FieldType {
-  @Input() field: FormlyFieldConfig;
+@Directive()
+export abstract class FieldType<F extends FormlyFieldConfig = FormlyFieldConfig> {
+  @Input() field: F;
+  defaultOptions?: F;
 
-  @Input()
-  get model() { return this.field.model; }
-  set model(m: any) { console.warn(`NgxFormly: passing 'model' input to '${this.constructor.name}' component is not required anymore, you may remove it!`); }
+  get model() {
+    return this.field.model;
+  }
 
-  @Input()
-  get form() { return <FormGroup> this.field.parent.formControl; }
-  set form(form) { console.warn(`NgxFormly: passing 'form' input to '${this.constructor.name}' component is not required anymore, you may remove it!`); }
+  get form() {
+    return this.field.form;
+  }
 
-  @Input()
-  get options() { return this.field.options; }
-  set options(options: FormlyFormOptions) { console.warn(`NgxFormly: passing 'options' input to '${this.constructor.name}' component is not required anymore, you may remove it!`); }
+  get options() {
+    return this.field.options;
+  }
 
-  get key() { return this.field.key; }
+  get key() {
+    return this.field.key;
+  }
 
-  get formControl(): AbstractControl { return this.field.formControl; }
+  get formControl() {
+    return this.field.formControl;
+  }
 
-  get to(): FormlyTemplateOptions { return this.field.templateOptions; }
+  get to(): NonNullable<Required<F>['templateOptions']> {
+    if (!!this.field.templateOptions) {
+      return this.field.templateOptions as NonNullable<Required<F>['templateOptions']>;
+    } else {
+      return {} as NonNullable<Required<F>['templateOptions']>;
+    }
+  }
 
-  get showError(): boolean { return this.options.showError(this); }
+  get showError(): boolean {
+    return this.options.showError(this);
+  }
 
-  get id(): string { return this.field.id; }
+  get id(): string {
+    return this.field.id;
+  }
 
-  get formState() { return this.options.formState || {}; }
-}
-
-/**
- * @deprecated use `FieldType` instead
- */
-export abstract class Field extends FieldType {
-  constructor() {
-    super();
-    console.warn(`NgxFormly: 'Field' has been renamed to 'FieldType', extend 'FieldType' instead.`);
+  get formState() {
+    return this.options.formState || {};
   }
 }

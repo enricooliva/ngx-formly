@@ -1,22 +1,33 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ChangeDetectionStrategy, OnChanges } from '@angular/core';
 import { FormlyConfig } from '../services/formly.config';
-import { FormlyFieldConfig } from '../components/formly.field.config';
+import { FormlyFieldConfig } from '../models';
 import { isObject } from '../utils';
+import { Observable, isObservable, of } from 'rxjs';
+import { startWith, switchMap } from 'rxjs/operators';
 
 @Component({
   selector: 'formly-validation-message',
-  template: `{{ errorMessage }}`,
+  template: '{{ errorMessage$ | async }}',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class FormlyValidationMessage {
+export class FormlyValidationMessage implements OnChanges {
   @Input() field: FormlyFieldConfig;
+  errorMessage$: Observable<string>;
 
-  constructor(private formlyConfig: FormlyConfig) {}
+  constructor(private config: FormlyConfig) {}
 
-  get errorMessage(): string {
+  ngOnChanges() {
+    this.errorMessage$ = this.field.formControl.statusChanges.pipe(
+      startWith(null),
+      switchMap(() => (isObservable(this.errorMessage) ? this.errorMessage : of(this.errorMessage))),
+    );
+  }
+
+  get errorMessage() {
     const fieldForm = this.field.formControl;
-    for (let error in fieldForm.errors) {
+    for (const error in fieldForm.errors) {
       if (fieldForm.errors.hasOwnProperty(error)) {
-        let message: string | Function = this.formlyConfig.getValidatorMessage(error);
+        let message = this.config.getValidatorMessage(error);
 
         if (isObject(fieldForm.errors[error])) {
           if (fieldForm.errors[error].errorPath) {
@@ -28,15 +39,15 @@ export class FormlyValidationMessage {
           }
         }
 
-        if (this.field.validation && this.field.validation.messages && this.field.validation.messages[error]) {
+        if (this.field.validation?.messages?.[error]) {
           message = this.field.validation.messages[error];
         }
 
-        if (this.field.validators && this.field.validators[error] && this.field.validators[error].message) {
+        if (this.field.validators?.[error]?.message) {
           message = this.field.validators[error].message;
         }
 
-        if (this.field.asyncValidators && this.field.asyncValidators[error] && this.field.asyncValidators[error].message) {
+        if (this.field.asyncValidators?.[error]?.message) {
           message = this.field.asyncValidators[error].message;
         }
 

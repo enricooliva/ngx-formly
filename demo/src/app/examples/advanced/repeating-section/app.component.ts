@@ -21,7 +21,6 @@ export class AppComponent {
         addText: 'Add another investment',
       },
       fieldArray: {
-        fieldGroupClassName: 'row',
         fieldGroup: [
           {
             className: 'col-sm-4',
@@ -47,10 +46,6 @@ export class AppComponent {
             className: 'col-sm-4',
             templateOptions: {
               label: 'Stock Identifier:',
-              addonRight: {
-                class: 'fa fa-code',
-                onClick: (to, fieldType, $event) => console.log(to, fieldType, $event),
-              },
             },
           },
         ],

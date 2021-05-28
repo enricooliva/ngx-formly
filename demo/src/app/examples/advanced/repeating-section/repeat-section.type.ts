@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
-import { FieldArrayType, FormlyFormBuilder } from '@ngx-formly/core';
+import { FieldArrayType } from '@ngx-formly/core';
 
 @Component({
   selector: 'formly-repeat-section',
   template: `
-    <div *ngFor="let field of field.fieldGroup; let i = index;" class="row">
+    <div *ngFor="let field of field.fieldGroup; let i = index" class="row">
       <formly-field class="col" [field]="field"></formly-field>
       <div class="col-sm-2 d-flex align-items-center">
         <button class="btn btn-danger" type="button" (click)="remove(i)">Remove</button>
@@ -15,8 +15,4 @@ import { FieldArrayType, FormlyFormBuilder } from '@ngx-formly/core';
     </div>
   `,
 })
-export class RepeatTypeComponent extends FieldArrayType {
-  constructor(builder: FormlyFormBuilder) {
-    super(builder);
-  }
-}
+export class RepeatTypeComponent extends FieldArrayType {}

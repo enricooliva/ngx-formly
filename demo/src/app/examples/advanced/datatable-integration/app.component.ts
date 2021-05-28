@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
 import { FormGroup } from '@angular/forms';
-import { FormlyFormOptions, FormlyFieldConfig } from '@ngx-formly/core/';
+import { FormlyFormOptions, FormlyFieldConfig } from '@ngx-formly/core';
 
 @Component({
   selector: 'formly-app-example',
@@ -19,25 +19,26 @@ export class AppComponent {
     {
       fieldGroupClassName: 'row',
       fieldGroup: [
-      {
-        key: 'name',
-        type: 'input',
-        className: 'col-md-6',
-        templateOptions: {
-          label: 'Name',
-          required: true,
+        {
+          key: 'name',
+          type: 'input',
+          className: 'col-md-6',
+          templateOptions: {
+            label: 'Name',
+            required: true,
+          },
         },
-      },
-      {
-        key: 'surname',
-        type: 'input',
-        className: 'col-md-6',
-        templateOptions: {
-          label: 'Surname',
-          required: true,
+        {
+          key: 'surname',
+          type: 'input',
+          className: 'col-md-6',
+          templateOptions: {
+            label: 'Surname',
+            required: true,
+          },
         },
-      },
-    ]},
+      ],
+    },
     {
       key: 'investments',
       type: 'datatable',
@@ -67,12 +68,6 @@ export class AppComponent {
           {
             type: 'input',
             key: 'stockIdentifier',
-            templateOptions: {
-              addonRight: {
-                class: 'fa fa-code',
-                onClick: (to, fieldType, $event) => console.log(to, fieldType, $event),
-              },
-            },
           },
         ],
       },
@@ -80,9 +75,8 @@ export class AppComponent {
   ];
 
   constructor() {
-    this.fetch((data) => this.model = data);
+    this.fetch((data) => (this.model = data));
   }
-
 
   submit() {
     alert(JSON.stringify(this.model));

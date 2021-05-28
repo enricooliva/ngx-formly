@@ -1,3 +1,4 @@
+/* You can add global styles to this file, and also import other style files */
 // bootstrap
 @import '~bootstrap/scss/bootstrap-grid';
 @import '~bootstrap/scss/mixins';
@@ -18,26 +19,24 @@ legend {
   border-bottom: 1px solid #e5e5e5;
 }
 
-// prism
-@import '~prismjs/themes/prism.css';
+// highlight.js
+@import '~highlight.js/styles/github.css';
 
 // material
 @import '~@angular/material/theming';
 
 @import './app/shared/example-viewer/example-viewer-theme';
-@import './app/home/home-theme.scss';
 @include mat-core();
 
 // Define a theme.
 $primary: mat-palette($mat-indigo);
-$accent:  mat-palette($mat-pink, A200, A100, A400);
+$accent: mat-palette($mat-pink, A200, A100, A400);
 
 $theme: mat-light-theme($primary, $accent);
 
 // Include all theme styles for the components.
 @include angular-material-theme($theme);
 @include example-viewer-theme($theme);
-@include home-page-theme($theme);
 
 pre {
   display: block;
@@ -58,3 +57,7 @@ pre {
 }
 
 @import './markdown.css';
+
+// ag-grid
+@import '~ag-grid-community/dist/styles/ag-grid.css';
+@import '~ag-grid-community/dist/styles/ag-theme-balham.css';

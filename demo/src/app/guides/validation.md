@@ -56,26 +56,6 @@ export function IpValidator(control: FormControl): ValidationErrors {
 })
 ```
 
-**ALERT!** If your function is async, you need to include it within `asyncValidators` property:
-```typescript
-export function ipAsyncValidator(control: FormControl): Promise {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-        if(/(\d{1,3}\.){3}\d{1,3}/.test(control.value)) {
-              resolve({ 'ip': true });
-        } else {
-              resolve(null);
-        }
-    }, 1000);
-  });
-}
-...
-FormlyModule.forRoot({
-  asyncValidators: [
-    { name: 'ipAsync', validation: ipAsyncValidator },
-  ],
-})
-```
 ##### FIELD WITH CUSTOM VALIDATION
 You just need to include the name of the validate function, declared in `FormlyModule`, within the property `validators.validation`.
 ```typescript
@@ -278,5 +258,5 @@ The formly type has to be referenced in the field
 ```
 
 You could try the DEMO to test the several methods to create custom validators.
-- [Custom Validators](https://formly-js.github.io/ngx-formly/examples/validation/custom-validation)
-- [Async Validators](https://formly-js.github.io/ngx-formly/examples/validation/unique-value-async-validation)
+- [Custom Validators](https://formly.dev/examples/validation/custom-validation)
+- [Async Validators](https://formly.dev/examples/validation/unique-value-async-validation)

@@ -1,4 +1,14 @@
-import { Component, Input, OnInit, OnDestroy, ViewChild, ViewContainerRef, ComponentFactoryResolver, ComponentRef, ElementRef } from '@angular/core';
+import {
+  Component,
+  Input,
+  OnInit,
+  OnDestroy,
+  ViewChild,
+  ViewContainerRef,
+  ComponentFactoryResolver,
+  ComponentRef,
+  ElementRef,
+} from '@angular/core';
 import { CopierService } from '../copier/copier.service';
 import JSONFormatter from 'json-formatter-js';
 import { FormlyFieldConfig } from '@ngx-formly/core';
@@ -7,8 +17,9 @@ export interface ExampleType {
   title: string;
   description: string;
   component: any;
+  deps?: string[];
   debug: boolean;
-  files: { file: string; filecontent: string; content: string }[];
+  files: { file: string; filecontent: { default: string }; content?: string }[];
 }
 
 @Component({
@@ -28,7 +39,7 @@ export class ExampleViewerComponent implements OnInit, OnDestroy {
   _debugFields: any;
   _prevModel: any;
 
-  @ViewChild('demo', {read: ViewContainerRef}) demoRef: ViewContainerRef;
+  @ViewChild('demo', { read: ViewContainerRef, static: true }) demoRef: ViewContainerRef;
   @ViewChild('modelPreview') modelPreviewRef: ElementRef;
   demoComponentRef: ComponentRef<any>;
 

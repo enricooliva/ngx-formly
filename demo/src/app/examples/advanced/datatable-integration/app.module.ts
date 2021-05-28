@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
-import { FormlyModule } from '@ngx-formly/core/';
+import { FormlyModule } from '@ngx-formly/core';
 import { FormlyBootstrapModule } from '@ngx-formly/bootstrap/';
 
 import { AppComponent } from './app.component';
@@ -34,9 +34,6 @@ import { NgxDatatableModule } from '@swimlane/ngx-datatable';
       ],
     }),
   ],
-  declarations: [
-    AppComponent,
-    DatatableTypeComponent,
-  ],
+  declarations: [AppComponent, DatatableTypeComponent],
 })
-export class AppModule { }
+export class AppModule {}

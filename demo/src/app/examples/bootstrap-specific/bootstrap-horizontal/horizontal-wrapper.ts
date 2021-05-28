@@ -1,4 +1,4 @@
-import { Component, ViewChild, ViewContainerRef } from '@angular/core';
+import { Component } from '@angular/core';
 import { FieldWrapper } from '@ngx-formly/core';
 
 @Component({
@@ -9,12 +9,14 @@ import { FieldWrapper } from '@ngx-formly/core';
         {{ to.label }}
         <ng-container *ngIf="to.required && to.hideRequiredMarker !== true">*</ng-container>
       </label>
-      <div class="col-sm-10">
+      <div class="col-sm-7">
         <ng-template #fieldComponent></ng-template>
+      </div>
+
+      <div *ngIf="showError" class="col-sm-3 invalid-feedback d-block">
+        <formly-validation-message [field]="field"></formly-validation-message>
       </div>
     </div>
   `,
 })
-export class FormlyHorizontalWrapper extends FieldWrapper {
-  @ViewChild('fieldComponent', { read: ViewContainerRef }) fieldComponent: ViewContainerRef;
-}
+export class FormlyHorizontalWrapper extends FieldWrapper {}

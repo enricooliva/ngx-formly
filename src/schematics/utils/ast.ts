@@ -1,13 +1,29 @@
-import { normalize } from '@angular-devkit/core';
+import { JsonParseMode, normalize, parseJson } from '@angular-devkit/core';
 import { SchematicsException, Tree } from '@angular-devkit/schematics';
 import * as ts from 'typescript';
 import { addImportToModule } from '@schematics/angular/utility/ast-utils';
 import { InsertChange } from '@schematics/angular/utility/change';
-import { getWorkspace } from '@schematics/angular/utility/config';
 import { getAppModulePath } from '@schematics/angular/utility/ng-ast-utils';
 import { findModuleFromOptions as internalFindModule } from '@schematics/angular/utility/find-module';
-import { WorkspaceProject } from '@angular-devkit/core/src/workspace';
+import { WorkspaceProject, WorkspaceSchema } from '@schematics/angular/utility/workspace-models';
 
+export function getWorkspacePath(host: Tree): string {
+  const possibleFiles = ['/angular.json', '/.angular.json'];
+  const path = possibleFiles.filter(path => host.exists(path))[0];
+
+  return path;
+}
+
+export function getWorkspace(host: Tree): WorkspaceSchema {
+  const path = getWorkspacePath(host);
+  const configBuffer = host.read(path);
+  if (configBuffer === null) {
+    throw new SchematicsException(`Could not find (${path})`);
+  }
+  const content = configBuffer.toString();
+
+  return parseJson(content, JsonParseMode.Loose) as {} as WorkspaceSchema;
+}
 
 /** Reads file given path and returns TypeScript source file. */
 export function getSourceFile(host: Tree, path: string): ts.SourceFile {
@@ -68,7 +84,7 @@ export function getStylesPath(host: Tree, project: WorkspaceProject): string {
   const buildTarget = project.architect['build'];
 
   if (buildTarget.options && buildTarget.options.styles && buildTarget.options.styles.length) {
-    const styles = buildTarget.options.styles.map(s => typeof s === 'string' ? s : s.input);
+    const styles = buildTarget.options.styles.map(s => typeof s === 'string' ? s : (s as any).input);
 
     // First, see if any of the assets is called "styles.(le|sc|c)ss", which is the default
     // "main" style sheet.
@@ -97,7 +113,7 @@ export function findModuleFromOptions(host: Tree, options: any) {
   const project = workspace.projects[options.project];
 
   if (options.path === undefined) {
-    options.path = `/${project.root}/src/app`;
+    options.path = `/${project.sourceRoot}`;
   }
 
   return internalFindModule(host, options);

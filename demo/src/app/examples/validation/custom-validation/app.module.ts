@@ -1,13 +1,12 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, ValidationErrors } from '@angular/forms';
+import { ReactiveFormsModule, FormControl, ValidationErrors } from '@angular/forms';
 import { FormlyModule, FormlyFieldConfig } from '@ngx-formly/core';
 import { FormlyBootstrapModule } from '@ngx-formly/bootstrap';
-import { FormControl } from '@angular/forms';
 import { AppComponent } from './app.component';
 
 export function IpValidator(control: FormControl): ValidationErrors {
-  return !control.value || /(\d{1,3}\.){3}\d{1,3}/.test(control.value) ? null : { 'ip': true };
+  return !control.value || /(\d{1,3}\.){3}\d{1,3}/.test(control.value) ? null : { ip: true };
 }
 
 export function IpValidatorMessage(err, field: FormlyFieldConfig) {
@@ -20,16 +19,10 @@ export function IpValidatorMessage(err, field: FormlyFieldConfig) {
     ReactiveFormsModule,
     FormlyBootstrapModule,
     FormlyModule.forRoot({
-      validators: [
-        { name: 'ip', validation: IpValidator },
-      ],
-      validationMessages: [
-        { name: 'ip', message: IpValidatorMessage },
-      ],
+      validators: [{ name: 'ip', validation: IpValidator }],
+      validationMessages: [{ name: 'ip', message: IpValidatorMessage }],
     }),
   ],
-  declarations: [
-    AppComponent,
-  ],
+  declarations: [AppComponent],
 })
-export class AppModule { }
+export class AppModule {}

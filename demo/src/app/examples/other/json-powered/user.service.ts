@@ -12,10 +12,14 @@ export class UserService {
   }
 
   getUser() {
-    return this.http.get<{ firstName: string, lastName: string }>('assets/json-powered/user_json');
+    return this.http.get<{ firstName: string; lastName: string }>('assets/json-powered/user_json');
   }
 
   getFields() {
     return this.http.get<FormlyFieldConfig[]>('assets/json-powered/user-form_json');
+  }
+
+  getColors() {
+    return this.http.get<{ label: string; value: string }[]>('assets/json-powered/colors_json');
   }
 }

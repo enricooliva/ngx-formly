@@ -2,7 +2,7 @@ import { Tree, SchematicsException } from '@angular-devkit/schematics';
 import * as parse5 from 'parse5';
 import { getIndexHtmlPath } from './ast';
 import { InsertChange } from '@schematics/angular/utility/change';
-import { WorkspaceProject } from '@angular-devkit/core/src/workspace';
+import { WorkspaceProject } from '@schematics/angular/utility/workspace-models';
 
 /**
  * Parses the index.html file to get the HEAD tag position.
@@ -11,12 +11,12 @@ import { WorkspaceProject } from '@angular-devkit/core/src/workspace';
  */
 export function getHeadTag(host: Tree, src: string) {
   const document = parse5.parse(src,
-    {locationInfo: true}) as parse5.AST.Default.Document;
+    { sourceCodeLocationInfo: true}) as parse5.DefaultTreeDocument;
 
   let head;
-  const visit = (nodes: parse5.AST.Default.Node[]) => {
+  const visit = (nodes: parse5.Node[]) => {
     nodes.forEach(node => {
-      const element = <parse5.AST.Default.Element>node;
+      const element = <parse5.DefaultTreeElement> node;
       if (element.tagName === 'head') {
         head = element;
       } else {

@@ -5,8 +5,8 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatMenuModule } from '@angular/material/menu';
 import { FormlyModule } from '@ngx-formly/core';
 
 import { StackblitzButtonModule } from './stackblitz';
@@ -19,6 +19,7 @@ import { CopierService } from './copier/copier.service';
     CommonModule,
     MatTooltipModule,
     MatTabsModule,
+    MatMenuModule,
     MatIconModule,
     MatButtonModule,
     StackblitzButtonModule,
@@ -30,17 +31,12 @@ import { CopierService } from './copier/copier.service';
     MatToolbarModule,
     MatIconModule,
     MatButtonModule,
-    MatListModule,
     MatTabsModule,
+    MatMenuModule,
 
     ExamplesRouterViewerComponent,
   ],
-  declarations: [
-    ExampleViewerComponent,
-    ExamplesRouterViewerComponent,
-  ],
-  providers: [
-    CopierService,
-  ],
+  declarations: [ExampleViewerComponent, ExamplesRouterViewerComponent],
+  providers: [CopierService],
 })
-export class SharedModule { }
+export class SharedModule {}

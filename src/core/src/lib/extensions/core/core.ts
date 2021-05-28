@@ -1,30 +1,35 @@
-import { FormlyExtension, FormlyConfig, TemplateManipulators } from '../../services/formly.config';
-import { FormlyFieldConfigCache, FormlyFieldConfig } from '../../components/formly.field.config';
-import { FormGroup, FormArray } from '@angular/forms';
-import { getFieldId, assignModelValue, isUndefined, clone, removeFieldControl, getFieldValue } from '../../utils';
+import { ChangeDetectorRef, ComponentRef } from '@angular/core';
+import { FormlyConfig } from '../../services/formly.config';
+import { FormlyFieldConfigCache, FormlyValueChangeEvent, FormlyExtension } from '../../models';
+import {
+  getFieldId,
+  assignFieldValue,
+  isUndefined,
+  getFieldValue,
+  reverseDeepMerge,
+  defineHiddenProp,
+  clone,
+  isNil,
+} from '../../utils';
+import { Subject } from 'rxjs';
 
 /** @experimental */
 export class CoreExtension implements FormlyExtension {
   private formId = 0;
-  constructor(private formlyConfig: FormlyConfig) { }
+  constructor(private config: FormlyConfig) {}
 
   prePopulate(field: FormlyFieldConfigCache) {
-    this.formlyConfig.createComponentInstance(field);
-    this.getFieldComponentInstance(field).prePopulate();
-    if (field.parent) {
-      return;
+    const root = field.parent;
+    this.initRootOptions(field);
+    if (root) {
+      Object.defineProperty(field, 'options', { get: () => root.options, configurable: true });
+      Object.defineProperty(field, 'model', {
+        get: () => (!isNil(field.key) && field.fieldGroup ? getFieldValue(field) : root.model),
+        configurable: true,
+      });
     }
 
-    const fieldTransforms = (field.options && field.options.fieldTransform) || this.formlyConfig.extras.fieldTransform;
-    (Array.isArray(fieldTransforms) ? fieldTransforms : [fieldTransforms]).forEach(fieldTransform => {
-      if (fieldTransform) {
-        console.warn(`NgxFormly: fieldTransform is deprecated since v5.0, use custom extension instead.`);
-        const fieldGroup = fieldTransform(field.fieldGroup, field.model, <FormGroup>field.formControl, field.options);
-        if (!fieldGroup) {
-          throw new Error('fieldTransform must return an array of fields');
-        }
-      }
-    });
+    this.getFieldComponentInstance(field).prePopulate();
   }
 
   onPopulate(field: FormlyFieldConfigCache) {
@@ -32,8 +37,10 @@ export class CoreExtension implements FormlyExtension {
     this.getFieldComponentInstance(field).onPopulate();
     if (field.fieldGroup) {
       field.fieldGroup.forEach((f, index) => {
-        Object.defineProperty(f, 'parent', { get: () => field, configurable: true });
-        Object.defineProperty(f, 'index', { get: () => index, configurable: true });
+        if (f) {
+          Object.defineProperty(f, 'parent', { get: () => field, configurable: true });
+          Object.defineProperty(f, 'index', { get: () => index, configurable: true });
+        }
         this.formId++;
       });
     }
@@ -43,105 +50,127 @@ export class CoreExtension implements FormlyExtension {
     this.getFieldComponentInstance(field).postPopulate();
   }
 
-  private initFieldOptions(field: FormlyFieldConfigCache) {
-    const root = <FormlyFieldConfigCache> field.parent;
-    if (!root) {
+  private initRootOptions(field: FormlyFieldConfigCache) {
+    if (field.parent) {
       return;
     }
 
-    Object.defineProperty(field, 'form', { get: () => root.formControl, configurable: true });
-    Object.defineProperty(field, 'options', { get: () => root.options, configurable: true });
-    Object.defineProperty(field, 'model', {
-      get: () => field.key && field.fieldGroup ? getFieldValue(field) : root.model,
-      configurable: true,
+    const options = field.options;
+    field.options.formState = field.options.formState || {};
+    if (!options.showError) {
+      options.showError = this.config.extras.showError;
+    }
+
+    if (!options.fieldChanges) {
+      defineHiddenProp(options, 'fieldChanges', new Subject<FormlyValueChangeEvent>());
+    }
+
+    if (!options._hiddenFieldsForCheck) {
+      options._hiddenFieldsForCheck = [];
+    }
+
+    options._markForCheck = (f) => {
+      console.warn(`Formly: 'options._markForCheck' is deprecated since v6.0, use 'options.detectChanges' instead.`);
+      options.detectChanges(f);
+    };
+
+    options.detectChanges = (f: FormlyFieldConfigCache) => {
+      if (f._componentRefs) {
+        f.options.checkExpressions(f.parent ?? f);
+        f._componentRefs.forEach((ref) => {
+          // NOTE: we cannot use ref.changeDetectorRef, see https://github.com/ngx-formly/ngx-formly/issues/2191
+          if (ref instanceof ComponentRef) {
+            const changeDetectorRef = ref.injector.get(ChangeDetectorRef);
+            changeDetectorRef.markForCheck();
+          } else {
+            ref.markForCheck();
+          }
+        });
+      }
+
+      if (f.fieldGroup) {
+        f.fieldGroup.forEach((f) => f && options.detectChanges(f));
+      }
+    };
+
+    options.resetModel = (model?: any) => {
+      model = clone(model ?? options._initialModel);
+      if (field.model) {
+        Object.keys(field.model).forEach((k) => delete field.model[k]);
+        Object.assign(field.model, model || {});
+      }
+
+      options.build(field);
+      field.form.reset(field.model);
+      if (options.parentForm && options.parentForm.control === field.formControl) {
+        (options.parentForm as { submitted: boolean }).submitted = false;
+      }
+    };
+
+    options.updateInitialValue = () => (options._initialModel = clone(field.model));
+    field.options.updateInitialValue();
+  }
+
+  private initFieldOptions(field: FormlyFieldConfigCache) {
+    reverseDeepMerge(field, {
+      id: getFieldId(`formly_${this.formId}`, field, field['index']),
+      hooks: {},
+      modelOptions: {},
+      templateOptions:
+        !field.type || isNil(field.key)
+          ? {}
+          : {
+              label: '',
+              placeholder: '',
+              disabled: false,
+            },
     });
 
-    field.id = getFieldId(`formly_${this.formId}`, field, field['index']);
-    field.templateOptions = field.templateOptions || {};
-    field.modelOptions = field.modelOptions || {};
-    field.hooks = field.hooks || {};
-    if (field.lifecycle) {
-      console.warn(`NgxFormly: 'lifecycle' is deprecated since v5.0, use 'hooks' instead.`);
+    if (this.config.extras.resetFieldOnHide && field.resetOnHide !== false) {
+      field.resetOnHide = true;
     }
 
-    if (field.type && field.key) {
-      field.templateOptions = Object.assign({
-        label: '',
-        placeholder: '',
-        focus: false,
-      }, field.templateOptions);
-    }
-
-    if (field.template && field.type !== 'formly-template') {
-      if (field.type) {
-        console.warn(`NgxFormly: passing 'type' property is not allowed when 'template' is set.`);
-      }
+    if (
+      field.type !== 'formly-template' &&
+      (field.template || (field.expressionProperties && field.expressionProperties.template))
+    ) {
       field.type = 'formly-template';
-    }
-
-    if (field.type) {
-      this.formlyConfig.getMergedField(field);
-    }
-    if (field.key && isUndefined(field.defaultValue) && (field.fieldGroup || field.fieldArray)) {
-      field.defaultValue = field.fieldArray ? [] : {};
-    }
-
-    if (!isUndefined(field.defaultValue) && isUndefined(getFieldValue(field))) {
-      assignModelValue(root.model, field.key, field.defaultValue);
-    }
-
-    this.initFieldWrappers(field);
-    if (field.fieldArray) {
-      this.initFieldArray(field);
     }
 
     if (!field.type && field.fieldGroup) {
       field.type = 'formly-group';
     }
-  }
 
-  private initFieldArray(field: FormlyFieldConfigCache) {
-    field.fieldGroup = field.fieldGroup || [];
-    if (field.fieldGroup.length > field.model.length) {
-      for (let i = field.fieldGroup.length; i >= field.model.length; --i) {
-        removeFieldControl(field.formControl as FormArray, i);
-        field.fieldGroup.splice(i, 1);
+    if (field.type) {
+      this.config.getMergedField(field);
+    }
+
+    if (!isNil(field.key) && !isUndefined(field.defaultValue) && isUndefined(getFieldValue(field))) {
+      let setDefaultValue = !field.resetOnHide || !(field.hide || field.hideExpression);
+      if (setDefaultValue && field.resetOnHide) {
+        let parent = field.parent;
+        while (parent && !parent.hideExpression && !parent.hide) {
+          parent = parent.parent;
+        }
+        setDefaultValue = !parent || !(parent.hideExpression || parent.hide);
+      }
+
+      if (setDefaultValue) {
+        assignFieldValue(field, field.defaultValue);
       }
     }
 
-    for (let i = field.fieldGroup.length; i < field.model.length; i++) {
-      const f = { ...clone(field.fieldArray), key: `${i}` };
-      field.fieldGroup.push(f);
-    }
-  }
-
-  private initFieldWrappers(field: FormlyFieldConfig) {
     field.wrappers = field.wrappers || [];
-    const fieldTemplateManipulators: TemplateManipulators = {
-      preWrapper: [],
-      postWrapper: [],
-      ...(field.templateOptions.templateManipulators || {}),
-    };
-
-    field.wrappers = [
-      ...this.formlyConfig.templateManipulators.preWrapper.map(m => m(field)),
-      ...fieldTemplateManipulators.preWrapper.map(m => m(field)),
-      ...field.wrappers,
-      ...this.formlyConfig.templateManipulators.postWrapper.map(m => m(field)),
-      ...fieldTemplateManipulators.postWrapper.map(m => m(field)),
-    ].filter((el, i, a) => el && i === a.indexOf(el));
   }
 
   private getFieldComponentInstance(field: FormlyFieldConfigCache) {
-    let instance: FormlyExtension = {};
-    if (field._componentFactory && field._componentFactory.componentRef) {
-      instance = field._componentFactory.componentRef.instance;
-    }
+    const componentRef = this.config.resolveFieldTypeRef(field);
+    const instance = componentRef?.instance as FormlyExtension;
 
     return {
-      prePopulate: () => instance.prePopulate && instance.prePopulate(field),
-      onPopulate: () => instance.onPopulate && instance.onPopulate(field),
-      postPopulate: () => instance.postPopulate && instance.postPopulate(field),
+      prePopulate: () => instance?.prePopulate?.(field),
+      onPopulate: () => instance?.onPopulate?.(field),
+      postPopulate: () => instance?.postPopulate?.(field),
     };
   }
 }

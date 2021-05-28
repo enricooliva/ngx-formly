@@ -1,272 +1,344 @@
-import { FormGroup, Validators } from '@angular/forms';
-import { Component } from '@angular/core';
+import { FormControl } from '@angular/forms';
+import { Subject, of, BehaviorSubject } from 'rxjs';
+import { FormlyFieldConfig, FormlyFieldConfigCache } from '../../models';
+import { createBuilder } from '@ngx-formly/core/testing';
 
-import { Subject, of } from 'rxjs';
-
-
-import { FormlyFieldConfig, FormlyFormBuilder, FieldArrayType, FormlyConfig } from '@ngx-formly/core';
-import { MockComponent } from '../../test-utils';
-import { FormlyValueChangeEvent, FormlyFormOptionsCache } from '../../components/formly.field.config';
-import { FieldExpressionExtension } from './field-expression';
-import { FieldValidationExtension } from '../field-validation/field-validation';
-import { FieldFormExtension } from '../field-form/field-form';
-import { CoreExtension } from '../core/core';
-
-
-describe('FieldExpressionExtension', () => {
-  let form: FormGroup;
-  let options: FormlyFormOptionsCache;
-  let builder: FormlyFormBuilder;
-  let TestComponent: Component;
-
-  beforeEach(() => {
-    TestComponent = MockComponent({ selector: 'formly-test-cmp' });
-
-    form = new FormGroup({});
-    options = {
-      fieldChanges: new Subject<FormlyValueChangeEvent>(),
-    };
-    const config = new FormlyConfig();
-    config.addConfig({
-      types: [
-        { name: 'input', component: TestComponent },
-        { name: 'checkbox', component: TestComponent },
-        { name: 'repeat', component: FieldArrayType },
-      ],
-      wrappers: [{ name: 'label', component: TestComponent, types: ['input'] }],
-      validators: [{ name: 'required', validation: Validators.required }],
-      extensions: [
-        { name: 'core', extension: new CoreExtension(config) },
-        { name: 'field-validation', extension: new FieldValidationExtension(config) },
-        { name: 'field-form', extension: new FieldFormExtension() },
-        { name: 'field-expression', extension: new FieldExpressionExtension() },
-      ],
-    });
-
-    builder = new FormlyFormBuilder(config);
+function buildField({ model, options, ...field }: FormlyFieldConfigCache): FormlyFieldConfigCache {
+  const builder = createBuilder({
+    extensions: ['core', 'validation', 'form', 'expression'],
   });
 
+  builder.build({
+    model: model || {},
+    options,
+    fieldGroup: [field],
+  });
+
+  return field;
+}
+
+describe('FieldExpressionExtension', () => {
   describe('field visibility (hideExpression)', () => {
-    it('should update field visibility', () => {
-      const fields: FormlyFieldConfig[] = [
-        {
-          key: 'visibilityToggle',
-          type: 'input',
-        },
-        {
-          key: 'text',
-          type: 'input',
-          hideExpression: '!model.visibilityToggle',
-        },
-      ];
-      const model = {};
+    it('should evaluate string expression', () => {
+      const field = buildField({
+        key: 'text',
+        hideExpression: '!model.visibilityToggle',
+      });
 
-      builder.buildForm(form, fields, model, options);
+      expect(field.hide).toBeTrue();
+      expect(field.templateOptions.hidden).toBeTrue();
 
-      expect(fields[1].hide).toBeTruthy();
-      expect(fields[1].templateOptions.hidden).toBeTruthy();
+      field.model.visibilityToggle = 'test';
+      field.options.checkExpressions(field);
 
-      model['visibilityToggle'] = 'test';
-
-      options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-      expect(fields[1].hide).toBeFalsy();
-      expect(fields[1].templateOptions.hidden).toBeFalsy();
+      expect(field.hide).toBeFalse();
+      expect(field.templateOptions.hidden).toBeFalse();
     });
 
-    it('should update field visibility within field arrays', () => {
-      const fields: FormlyFieldConfig[] = [
-        {
-          key: 'address',
-          type: 'repeat',
-          hideExpression: model => model.length !== 1,
-          fieldArray: {
-            fieldGroup: [
-              {
-                key: 'city',
-                type: 'input',
-                hideExpression: 'model.addressIsRequired',
-              },
-            ],
+    it('should evaluate function expression', () => {
+      const field = buildField({
+        key: 'text',
+        hideExpression: () => true,
+      });
+
+      expect(field.hide).toBeTrue();
+    });
+
+    it('should evaluate boolean expression', () => {
+      const field = buildField({
+        key: 'text',
+        hideExpression: true,
+      });
+
+      expect(field.hide).toBeTrue();
+    });
+
+    it('should provide model, formState and field args', () => {
+      const spy = jest.fn();
+      const field = buildField({
+        hideExpression: spy,
+      });
+
+      expect(spy).toHaveBeenCalledWith(field.model, field.options.formState, field);
+    });
+
+    describe('attach/detach form control', () => {
+      it('should attach form control for displayed field', () => {
+        const { formControl } = buildField({ hide: false, key: 'foo' });
+        expect(formControl.parent).not.toBeNull();
+      });
+
+      it('should detach form control for hidden field', () => {
+        const { formControl } = buildField({ hide: true, key: 'foo' });
+        expect(formControl.parent).toBeNull();
+      });
+
+      it('should toggle form control of child group when key is empty', () => {
+        const field = buildField({
+          hide: true,
+          fieldGroup: [{ fieldGroup: [{ key: 'foo' }] }],
+        });
+        expect(field.formControl.get('foo')).toBeNull();
+
+        field.hide = false;
+        field.options.checkExpressions(field.parent);
+        expect(field.formControl.get('foo')).not.toBeNull();
+      });
+
+      it('should toggle field control when hide changed programmatically', () => {
+        const { fieldGroup: fields, form, options } = buildField({
+          fieldGroup: [
+            { hide: false, key: 'foo' },
+            { hide: true, fieldGroup: [{ key: 'bar' }] },
+          ],
+        });
+
+        fields[0].hide = true;
+        fields[1].hide = false;
+        options.checkExpressions({ form, fieldGroup: fields, options });
+
+        expect(form.get('foo')).toBeNull();
+        expect(form.get('bar')).not.toBeNull();
+      });
+
+      it('should toggle controls of the hidden fields before the visible ones', () => {
+        const field = buildField({
+          model: { type: false },
+          fieldGroup: [
+            {
+              key: 'key1',
+              hideExpression: (model) => model.type,
+            },
+            {
+              key: 'key1',
+              hideExpression: (model) => !model.type,
+            },
+          ],
+        });
+        const { options, fieldGroup: fields, form } = field;
+
+        options.checkExpressions(field);
+        expect(fields[0].hide).toBeFalse();
+        expect(fields[0].formControl).toBe(form.get('key1'));
+        expect(fields[1].hide).toBeTrue();
+        expect(fields[1].formControl).toBe(form.get('key1'));
+      });
+
+      it('should take account of parent hide state', () => {
+        const child: FormlyFieldConfig = {
+          key: 'child',
+          hideExpression: () => false,
+          defaultValue: 'foo',
+        };
+        const field = buildField({
+          fieldGroup: [
+            {
+              key: 'parent',
+              hide: true,
+              fieldGroup: [{ fieldGroup: [child] }],
+            },
+          ],
+        });
+
+        expect(child.hide).toBeTruthy();
+      });
+
+      it('should support multiple field with the same key', () => {
+        const field = buildField({
+          fieldGroup: [
+            {
+              key: 'key1',
+              formControl: new FormControl(),
+              hideExpression: (model) => model.type,
+            },
+            {
+              key: 'key1',
+              formControl: new FormControl(),
+              hideExpression: (model) => !model.type,
+            },
+          ],
+        });
+
+        const {
+          form,
+          fieldGroup: [f1, f2],
+        } = field;
+
+        field.model.type = false;
+        field.options.checkExpressions(field.parent);
+
+        expect(f1.hide).toBeFalse();
+        expect(f1.formControl).toBe(form.get('key1'));
+        expect(f2.hide).toBeTrue();
+        expect(f2.formControl).not.toBe(form.get('key1'));
+
+        field.model.type = true;
+        field.options.checkExpressions(field.parent);
+        expect(f1.hide).toBeTrue();
+        expect(f1.formControl).not.toBe(form.get('key1'));
+        expect(f2.hide).toBeFalse();
+        expect(f2.formControl).toBe(form.get('key1'));
+      });
+    });
+
+    it('should not override hide field within fieldGroup', () => {
+      const field = buildField({
+        hideExpression: () => false,
+        fieldGroup: [
+          {
+            key: 'test',
+            hide: true,
           },
-        },
-        {
-          key: 'addressIsRequired',
-          type: 'checkbox',
-        },
-      ];
-      const model = {
-        address: [{
-          addressIsRequired: true,
-        }],
-      };
+        ],
+      });
 
-      builder.buildForm(form, fields, model, options);
+      expect(field.hide).toBeFalse();
+      expect(field.fieldGroup[0].hide).toBeTrue();
+    });
 
-      const cityField = fields[0].fieldGroup[0].fieldGroup[0];
+    it('should ignore validation of hidden fields (same key)', () => {
+      const field = buildField({
+        fieldGroup: [{ key: 'name', hide: true, templateOptions: { required: true } }, { key: 'name' }],
+      });
 
-      expect(cityField.templateOptions.hidden).toBeTruthy();
-      expect(cityField.hide).toBeTruthy();
+      field.fieldGroup[0].hide = false;
 
-      model.address[0].addressIsRequired = false;
-
-      options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-      expect(cityField.templateOptions.hidden).toBeFalsy();
-      expect(cityField.hide).toBeFalsy();
+      field.options.checkExpressions(field);
+      expect(field.form.valid).toBeFalse();
     });
   });
 
   describe('expressionProperties', () => {
-    describe('field validity', () => {
-      it('should update field validity', () => {
-        const fields: FormlyFieldConfig[] = [
-          {
-            key: 'checked',
-            type: 'checkbox',
-          },
-          {
-            key: 'text',
-            type: 'input',
-            templateOptions: {
-              label: 'Am I required or not?',
-            },
-            expressionProperties: {
-              'templateOptions.required': 'model.checked',
-            },
-          },
-        ];
-        const model = {
-          checked: true,
-        };
-
-        builder.buildForm(form, fields, model, options);
-
-        expect(fields[1].formControl.status).toEqual('INVALID');
-
-        model.checked = false;
-
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-        expect(fields[1].formControl.status).toEqual('VALID');
+    it('should resolve a string expression', () => {
+      const field = buildField({
+        key: 'name',
+        model: { label: 'test' },
+        options: { formState: { className: 'name_test' } },
+        expressionProperties: {
+          // using formState
+          className: 'formState.className',
+          // using field
+          'templateOptions.key': 'field.key',
+          // using model
+          'templateOptions.label': 'model.label',
+        },
       });
 
-      it('should update field validity within field groups', () => {
-        const fields: FormlyFieldConfig[] = [
-          {
-            key: 'fieldgroup',
-            fieldGroup: [
-              {
-                key: 'checked',
-                type: 'checkbox',
+      expect(field.className).toEqual('name_test');
+      expect(field.templateOptions.key).toEqual('name');
+      expect(field.templateOptions.label).toEqual('test');
+    });
+
+    it('should provide model, formState and field args', () => {
+      const spy = jest.fn();
+      const field = buildField({
+        expressionProperties: {
+          className: spy,
+        },
+      });
+
+      expect(spy).toHaveBeenCalledWith(field.model, field.options.formState, field);
+    });
+
+    it('should resolve a function expression', () => {
+      const field = buildField({
+        model: { label: 'test' },
+        expressionProperties: {
+          'templateOptions.label': () => 'test',
+        },
+      });
+
+      expect(field.templateOptions.label).toEqual('test');
+    });
+
+    it('should resolve an observable expression', () => {
+      const field = buildField({
+        expressionProperties: {
+          'templateOptions.label': of('test'),
+        },
+      });
+
+      field.hooks.onInit(field);
+      expect(field.templateOptions.label).toEqual('test');
+    });
+
+    describe('model expression', () => {
+      it('should resolve a model expression (field key = model key)', () => {
+        const field = buildField({
+          model: { label: 'test' },
+          options: { formState: { className: 'name_test' } },
+          key: 'name',
+          expressionProperties: {
+            'model.name': () => 'name_test',
+          },
+        });
+
+        expect(field.formControl.value).toEqual('name_test');
+        expect(field.model.name).toEqual('name_test');
+      });
+
+      it('should resolve a model expression (field key != model key)', () => {
+        const field = buildField({
+          model: { label: 'test' },
+          fieldGroup: [
+            {
+              key: 'name',
+              expressionProperties: {
+                'model.custom': () => 'custom_test',
               },
-              {
-                key: 'text',
-                type: 'input',
-                templateOptions: {
-                  label: 'Am I required or not?',
-                },
-                expressionProperties: {
-                  'templateOptions.required': 'model.checked',
-                },
-              },
-            ],
-          },
-        ];
-        const model = {
-          fieldgroup: {
-            checked: true,
-          },
-        };
-
-        builder.buildForm(form, fields, model, options);
-
-        expect(fields[0].fieldGroup[1].formControl.status).toEqual('INVALID');
-
-        model.fieldgroup.checked = false;
-
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-        expect(fields[0].fieldGroup[1].formControl.status).toEqual('VALID');
-      });
-
-      it('should update field validity within field arrays', () => {
-        const fields: FormlyFieldConfig[] = [
-          {
-            key: 'address',
-            type: 'repeat',
-            fieldArray: {
-              fieldGroup: [
-                {
-                  key: 'city',
-                  type: 'input',
-                  expressionProperties: {
-                    'templateOptions.required': 'model.addressIsRequired',
-                  },
-                },
-              ],
             },
-          },
-          {
-            key: 'addressIsRequired',
-            type: 'checkbox',
-          },
-        ];
-        const model = {
-          address: [{
-            addressIsRequired: true,
-          }],
-        };
+            { key: 'custom' },
+          ],
+        });
 
-        builder.buildForm(form, fields, model, options);
-
-        const cityField = fields[0].fieldGroup[0].fieldGroup[0];
-
-        expect(cityField.formControl.status).toEqual('INVALID');
-
-        model.address[0].addressIsRequired = false;
-
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-        expect(cityField.formControl.status).toEqual('VALID');
+        expect(field.model.custom).toEqual('custom_test');
       });
+
+      it('should resolve a model expression (nested field key)', () => {
+        const field = buildField({
+          model: { address: {} },
+          expressionProperties: {
+            'model.address.city': () => 'custom_test',
+          },
+          fieldGroup: [{ key: 'address', fieldGroup: [{ key: 'city' }] }],
+        });
+
+        expect(field.formControl.value).toEqual({ address: { city: 'custom_test' } });
+        expect(field.model).toEqual({ address: { city: 'custom_test' } });
+      });
+    });
+
+    it('should update field validity when using built-in validations expression', () => {
+      const formControl = new FormControl();
+      spyOn(formControl, 'updateValueAndValidity');
+
+      buildField({
+        key: 'checked',
+        formControl,
+        expressionProperties: {
+          'templateOptions.required': 'model.checked',
+        },
+        model: { checked: true },
+      });
+
+      expect(formControl.updateValueAndValidity).toHaveBeenCalledTimes(3);
     });
 
     describe('field disabled state', () => {
       it('should update field disabled state', () => {
-        const fields: FormlyFieldConfig[] = [
-          {
-            key: 'disableToggle',
-            type: 'checkbox',
+        const field = buildField({
+          key: 'text',
+          expressionProperties: {
+            'templateOptions.disabled': 'model.disableToggle',
           },
-          {
-            key: 'text',
-            type: 'input',
-            expressionProperties: {
-              'templateOptions.disabled': 'model.disableToggle',
-            },
-          },
-        ];
-        const model = {};
+        });
 
-        builder.buildForm(form, fields, model, options);
+        expect(field.templateOptions.disabled).toBeFalse();
 
-        // manually disable the form control so that service can enable on `checkFields`
-        fields[1].templateOptions.disabled = true;
+        field.model.disableToggle = 'test';
+        field.options.checkExpressions(field);
 
-        expect(fields[1].formControl.status).toEqual('DISABLED');
-
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-        expect(fields[1].formControl.status).toEqual('VALID');
-        expect(fields[1].templateOptions.disabled).toBeFalsy();
-
-        model['disableToggle'] = true;
-
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
-
-        expect(fields[1].formControl.status).toEqual('DISABLED');
-        expect(fields[1].templateOptions.disabled).toBeTruthy();
+        expect(field.templateOptions.disabled).toBeTrue();
       });
 
       it('should take account of parent disabled state', () => {
@@ -274,102 +346,174 @@ describe('FieldExpressionExtension', () => {
           address: true,
           city: false,
         };
-        const fields: FormlyFieldConfig[] = [{
+        const field = buildField({
           key: 'address',
           expressionProperties: { 'templateOptions.disabled': () => disabled.address },
           fieldGroup: [
             {
               key: 'city',
-              type: 'input',
               expressionProperties: { 'templateOptions.disabled': () => disabled.city },
             },
             {
               key: 'street',
-              type: 'input',
+              expressionProperties: { 'templateOptions.label': () => 'Street' },
             },
           ],
-        }];
+        });
 
-        const model = {};
-
-        builder.buildForm(form, fields, model, options);
-
-        expect(fields[0].templateOptions.disabled).toBeTruthy();
-        expect(fields[0].fieldGroup[0].templateOptions.disabled).toBeTruthy();
-        expect(fields[0].fieldGroup[1].templateOptions.disabled).toBeTruthy();
+        expect(field.templateOptions.disabled).toBeTrue();
+        expect(field.fieldGroup[0].templateOptions.disabled).toBeTrue();
+        expect(field.fieldGroup[1].templateOptions.label).toEqual('Street');
 
         disabled.address = false;
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
+        field.options.checkExpressions(field);
 
-        expect(fields[0].templateOptions.disabled).toBeFalsy();
-        expect(fields[0].fieldGroup[0].templateOptions.disabled).toBeFalsy();
-        expect(fields[0].fieldGroup[1].templateOptions.disabled).toBeFalsy();
+        expect(field.templateOptions.disabled).toBeFalse();
+        expect(field.fieldGroup[0].templateOptions.disabled).toBeFalse();
 
         disabled.city = true;
-        options._checkField({ formControl: form, fieldGroup: fields, model, options });
+        field.options.checkExpressions(field);
 
-        expect(fields[0].templateOptions.disabled).toBeFalsy();
-        expect(fields[0].fieldGroup[0].templateOptions.disabled).toBeTruthy();
-        expect(fields[0].fieldGroup[1].templateOptions.disabled).toBeFalsy();
+        expect(field.templateOptions.disabled).toBeFalse();
+        expect(field.fieldGroup[0].templateOptions.disabled).toBeTrue();
       });
-    });
 
-    describe('expression as observable', () => {
-      it('should update field from emitted observable values', () => {
-        const fields: FormlyFieldConfig[] = [
-          {
-            key: 'text',
-            type: 'input',
-            expressionProperties: {
-              'templateOptions.label': of('test'),
-            },
+      it('should update disabled state of hidden fields', () => {
+        const field = buildField({
+          key: 'group',
+          model: { group: { disableToggle: false } },
+          expressionProperties: {
+            'templateOptions.disabled': 'model.disableToggle',
           },
-        ];
-        const model = {};
-        const options = {};
+          fieldGroup: [{ key: 'child', hide: true }],
+        });
 
-        builder.buildForm(form, fields, model, options);
-        expect(fields[0].templateOptions.label).toEqual('test');
+        expect(field.templateOptions.disabled).toBeFalse();
+        expect(field.fieldGroup[0].templateOptions.disabled).toBeFalse();
+
+        field.model.disableToggle = true;
+        field.options.checkExpressions(field.parent);
+
+        expect(field.templateOptions.disabled).toBeTrue();
+        expect(field.fieldGroup[0].templateOptions.disabled).toBeTrue();
+      });
+
+      it('should update field on re-render', () => {
+        const stream$ = new BehaviorSubject('test');
+        const field = buildField({
+          key: 'text',
+          expressionProperties: {
+            'templateOptions.label': stream$,
+          },
+        });
+
+        field.hooks.onInit();
+        expect(field.templateOptions.label).toEqual('test');
+
+        field.hooks.onDestroy();
+        stream$.next('test2');
+        expect(field.templateOptions.label).toEqual('test');
+
+        field.hooks.onInit();
+        expect(field.templateOptions.label).toEqual('test2');
+      });
+
+      it('should change model through observable', () => {
+        const field = buildField({
+          key: 'text',
+          expressionProperties: {
+            'model.text': of('test'),
+          },
+        });
+
+        field.hooks.onInit();
+        expect(field.formControl.value).toEqual('test');
+      });
+
+      it('should supports array notation in expression property', () => {
+        const field = buildField({
+          model: [],
+          expressionProperties: { 'model[0]': '"ddd"' },
+        });
+
+        expect(field.model).toEqual(['ddd']);
+      });
+
+      it('should throw error when assign to an undefined prop', () => {
+        const build = () =>
+          buildField({
+            key: 'text',
+            expressionProperties: {
+              'nested.prop': '"ddd"',
+            },
+          });
+
+        expect(build).toThrowError(
+          /\[Formly Error\] \[Expression "nested.prop"\] Cannot set property 'prop' of undefined/i,
+        );
       });
     });
   });
 
-  describe('field changes', () => {
-    it('should allow subscription of FormlyValueChangeEvent', () => {
-      const fields: FormlyFieldConfig[] = [
-        {
-          key: 'visibilityToggle',
-          type: 'input',
-          defaultValue: 'show text',
-        },
-        {
-          key: 'text',
-          type: 'input',
-          defaultValue: 'initial value',
-          hideExpression: '!model.visibilityToggle',
-        },
-      ];
-      const model = {};
+  describe('fieldChanges', () => {
+    it('should emit fieldChanges on change field visibility', () => {
+      const fieldChanges = new Subject<any>();
+      const spy = jest.fn();
+      const subscription = fieldChanges.subscribe(spy);
 
-      options.fieldChanges.subscribe(({ field, type, value }) => {
-        if (type === 'hidden' && field.formControl && value) {
-          field.formControl.setValue(null);
-        }
+      const field = buildField({
+        key: 'text',
+        hideExpression: '!model.visibilityToggle',
+        options: { fieldChanges },
       });
 
-      builder.buildForm(form, fields, model, options);
+      expect(spy).toHaveBeenNthCalledWith(1, { field, type: 'expressionChanges', property: 'hide', value: true });
+      expect(spy).toHaveBeenNthCalledWith(2, { field, type: 'hidden', value: true });
 
-      expect(fields[1].hide).toBeFalsy();
-      expect(fields[1].templateOptions.hidden).toBeFalsy();
-      expect(fields[1].formControl.value).toEqual('initial value');
+      spy.mockReset();
+      field.model.visibilityToggle = 'test';
+      field.options.checkExpressions(field.parent);
 
-      model['visibilityToggle'] = null;
+      expect(spy).toHaveBeenNthCalledWith(1, { field, type: 'expressionChanges', property: 'hide', value: false });
+      expect(spy).toHaveBeenNthCalledWith(2, { field, type: 'hidden', value: false });
 
-      options._checkField({ formControl: form, fieldGroup: fields, model, options });
+      subscription.unsubscribe();
+    });
 
-      expect(fields[1].hide).toBeTruthy();
-      expect(fields[1].templateOptions.hidden).toBeTruthy();
-      expect(fields[1].formControl.value).toBeNull();
+    it('should emit fieldChanges when expression value changes', () => {
+      const fieldChanges = new Subject<any>();
+      const spy = jest.fn();
+      const subscription = fieldChanges.subscribe(spy);
+
+      const field = buildField({
+        key: 'text',
+        options: { fieldChanges },
+        expressionProperties: {
+          'templateOptions.label': 'field.formControl.value',
+        },
+      });
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith({
+        field,
+        type: 'expressionChanges',
+        property: 'templateOptions.label',
+        value: undefined,
+      });
+
+      spy.mockReset();
+      field.formControl.patchValue('foo');
+      field.options.checkExpressions(field.parent);
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy).toHaveBeenCalledWith({
+        field,
+        type: 'expressionChanges',
+        property: 'templateOptions.label',
+        value: 'foo',
+      });
+
+      subscription.unsubscribe();
     });
   });
 });

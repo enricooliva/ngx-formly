@@ -113,7 +113,70 @@ After:
     },
   ]
 ```
-**Warning**: `onChanges` under `hooks` doens't take account of model, options and form changes (https://github.com/formly-js/ngx-formly/issues/1241).
+**Warning**: `onChanges` under `hooks` doens't take account of model, options and form changes (https://github.com/ngx-formly/ngx-formly/issues/1241).
+
+ * `manipulators` config is deprecated in favor of `extension`:
+
+Before:
+```ts
+FormlyModule.forRoot({
+  manipulators: [{ method: 'run', class: TemplateAddons }],
+})
+```
+
+After:
+```ts
+FormlyModule.forRoot({
+  extensions: [{ name: 'addons', extension: addonsExtension }],
+})
+```
+
+* Passing content inside the 'formly-form' tag is deprecated.
+
+Before:
+```html
+<formly-form>
+  <button>Submit</button>
+</formly-form>
+```
+
+After:
+```html
+<formly-form></formly-form>
+<button type="submit">Submit</button>
+```
+
+* Passing 'immutable' attribute to 'formly-form' component is deprecated since v5.5, enable immutable mode through NgModule declaration instead.
+
+Before:
+```html
+<formly-form immutable></formly-form>
+```
+
+After:
+```ts
+@NgModule({
+  imports: [
+    FormlyModule.forRoot({
+      extras: { immutable: true }
+    }),
+  ],
+})
+```
+
+* Passing legacy select option `{key, value}` is deprecated since v5.5, use `{value, label}` instead.
+
+```patch
+{
+  type: 'select',
+  templateOptions: {
+    options: [
+--      { key: '1', value: 'label 1' },
+++      { value: '2', label: 'label 2' },
+    ],
+  }
+}
+```
 
 @ngx-formly/material
 --------------------

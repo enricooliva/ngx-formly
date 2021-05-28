@@ -1,4 +1,4 @@
-import { Component, ViewChild, ViewContainerRef } from '@angular/core';
+import { Component } from '@angular/core';
 import { FieldWrapper } from '@ngx-formly/core';
 
 @Component({
@@ -12,6 +12,4 @@ import { FieldWrapper } from '@ngx-formly/core';
     </div>
   `,
 })
-export class PanelWrapperComponent extends FieldWrapper {
-  @ViewChild('fieldComponent', {read: ViewContainerRef}) fieldComponent: ViewContainerRef;
-}
+export class PanelWrapperComponent extends FieldWrapper {}

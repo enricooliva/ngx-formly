@@ -1,17 +1,18 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
-import { FormlyModule } from '@ngx-formly/core';
+import { FormlyModule, FormlyFieldConfig } from '@ngx-formly/core';
 import { FormlyBootstrapModule } from '@ngx-formly/bootstrap';
 
 import { AnimationWrapperComponent } from './animation-wrapper.component';
 import { AppComponent } from './app.component';
 
-export class AnimationWrapper {
-  run(fc) {
-    fc.templateManipulators.preWrapper
-      .push(field => 'animation');
+export function animationExtension(field: FormlyFieldConfig) {
+  if (field.wrappers && field.wrappers.includes('animation')) {
+    return;
   }
+
+  field.wrappers = ['animation', ...(field.wrappers || [])];
 }
 
 @NgModule({
@@ -20,17 +21,11 @@ export class AnimationWrapper {
     ReactiveFormsModule,
     FormlyBootstrapModule,
     FormlyModule.forRoot({
-      wrappers: [
-        { name: 'animation', component: AnimationWrapperComponent },
-      ],
-      manipulators: [
-        { class: AnimationWrapper, method: 'run' },
-      ],
+      extras: { lazyRender: false },
+      wrappers: [{ name: 'animation', component: AnimationWrapperComponent }],
+      extensions: [{ name: 'animation', extension: { onPopulate: animationExtension } }],
     }),
   ],
-  declarations: [
-    AppComponent,
-    AnimationWrapperComponent,
-  ],
+  declarations: [AppComponent, AnimationWrapperComponent],
 })
-export class AppModule { }
+export class AppModule {}
